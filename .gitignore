@@ -21,3 +21,5 @@ Thumbs.db
 # Misc
 captures/
 gradle-app.setting
+
+artifact/
