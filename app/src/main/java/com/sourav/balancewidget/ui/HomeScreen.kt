@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+
 package com.sourav.balancewidget.ui
 
 import android.Manifest
@@ -8,6 +10,10 @@ import android.provider.Settings
 import android.text.TextUtils
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,17 +31,27 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Science
+import androidx.compose.material.icons.filled.Sms
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -43,6 +59,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -53,8 +70,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -68,6 +88,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     modifier: Modifier = Modifier,
@@ -91,6 +112,7 @@ fun HomeScreen(
     var showAccountDialog by remember { mutableStateOf(false) }
     var editingAccount by remember { mutableStateOf<Account?>(null) }
     var confirmDeleteId by remember { mutableStateOf<String?>(null) }
+    var advancedExpanded by remember { mutableStateOf(false) }
 
     if (showAccountDialog) {
         AccountEditorDialog(
@@ -119,13 +141,19 @@ fun HomeScreen(
                 TextButton(onClick = { confirmDeleteId = null }) { Text("Cancel") }
             },
             title = { Text("Delete account?") },
-            text = { Text("Remove ${acct?.label ?: "this account"} and all of its history. This can't be undone.") }
+            text = {
+                Text(
+                    "Remove ${acct?.label ?: "this account"} and all of its history. " +
+                        "This can't be undone."
+                )
+            }
         )
     }
 
     val selectedAccount = state.accounts.firstOrNull { it.id == selectedAccountId }
     val selectedHistory = remember(state.history, selectedAccountId) {
-        state.history.filter { it.accountId == selectedAccountId }
+        state.history
+            .filter { it.accountId == selectedAccountId }
             .sortedByDescending { it.timestampMillis }
     }
     val selectedLatest = selectedAccountId?.let { state.latestByAccount[it] }
@@ -134,248 +162,536 @@ fun HomeScreen(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
-        Text(
-            "Balance Widget",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold
-        )
-
-        // Account selector
+        // ---- Accounts row ----
         if (state.accounts.isNotEmpty()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScrollable(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                state.accounts.forEach { acct ->
-                    FilterChip(
-                        selected = acct.id == selectedAccountId,
-                        onClick = { selectedAccountId = acct.id },
-                        label = { Text("${acct.label}") }
-                    )
-                }
-                OutlinedButton(
-                    onClick = { editingAccount = null; showAccountDialog = true },
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                ) {
-                    Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Add", fontSize = 13.sp)
-                }
-            }
+            AccountChipsRow(
+                accounts = state.accounts,
+                selectedId = selectedAccountId,
+                onSelect = { selectedAccountId = it },
+                onAdd = { editingAccount = null; showAccountDialog = true }
+            )
         }
 
-        // Big balance card
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer
-            )
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    selectedAccount?.label ?: "No account yet",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    selectedLatest?.let { formatMoney(it.balance) }
-                        ?: selectedAccount?.let { formatMoney(it.startingBalance) }
-                        ?: "—",
-                    fontSize = 44.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-                selectedLatest?.let {
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "Updated " + relativeTime(it.timestampMillis) + " • via " + it.source,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
+        // ---- Hero balance card ----
+        HeroBalanceCard(
+            account = selectedAccount,
+            latest = selectedLatest,
+            onEdit = {
                 selectedAccount?.let {
-                    Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = {
-                            editingAccount = it
-                            showAccountDialog = true
-                        }) {
-                            Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Re-calibrate")
-                        }
-                        OutlinedButton(onClick = { confirmDeleteId = it.id }) {
-                            Icon(Icons.Filled.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Delete")
-                        }
+                    editingAccount = it
+                    showAccountDialog = true
+                }
+            },
+            onDelete = { selectedAccount?.let { confirmDeleteId = it.id } },
+            onAddFirst = { editingAccount = null; showAccountDialog = true }
+        )
+
+        // ---- Transactions ----
+        SectionHeader(
+            title = if (selectedAccount != null) "Recent activity" else "No account",
+            trailing = {
+                if (selectedAccount != null) {
+                    TextButton(onClick = { vm.syncPastSms() }) {
+                        Icon(
+                            Icons.Filled.Refresh,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text("Sync SMS", fontSize = 13.sp)
                     }
                 }
             }
+        )
+
+        TransactionsCard(history = selectedHistory)
+
+        scanStatus?.let {
+            Surface(
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.padding(12.dp)
+                )
+            }
         }
 
-        if (state.accounts.isEmpty()) {
-            Card(modifier = Modifier.fillMaxWidth()) {
+        // ---- Widget look (always visible — primary new feature) ----
+        WidgetLookCard(
+            opacity = state.widgetOpacity,
+            onOpacityChange = vm::setWidgetOpacity
+        )
+
+        // ---- Advanced (collapsible) ----
+        ExpandableSection(
+            title = "Advanced",
+            icon = Icons.Filled.Tune,
+            expanded = advancedExpanded,
+            onToggle = { advancedExpanded = !advancedExpanded }
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                SetupCard(
+                    notifEnabled = isNotifListenerEnabled(context),
+                    onOpenNotifSettings = {
+                        context.startActivity(
+                            Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                    },
+                    onGrantSms = {
+                        val perms = mutableListOf(
+                            Manifest.permission.RECEIVE_SMS,
+                            Manifest.permission.READ_SMS
+                        )
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            perms += Manifest.permission.POST_NOTIFICATIONS
+                        }
+                        smsPermLauncher.launch(perms.toTypedArray())
+                    }
+                )
+                TestsCard(
+                    activeSuffix = selectedAccount?.suffix ?: "9504",
+                    onInjectDebit = {
+                        val s = selectedAccount?.suffix ?: "9504"
+                        vm.addTestMessage(
+                            "Sent Rs.500.00 From HDFC Bank A/C *$s To Test On ${
+                                SimpleDateFormat("dd/MM/yy", Locale.getDefault()).format(Date())
+                            }"
+                        )
+                    },
+                    onInjectCredit = {
+                        val s = selectedAccount?.suffix ?: "9504"
+                        vm.addTestMessage(
+                            "Update! INR 1,200.00 deposited in HDFC Bank A/c XX$s on today."
+                        )
+                    },
+                    onResetAll = { vm.resetAll() }
+                )
+            }
+        }
+
+        Spacer(Modifier.height(4.dp))
+    }
+}
+
+// -------------------- Components --------------------
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AccountChipsRow(
+    accounts: List<Account>,
+    selectedId: String?,
+    onSelect: (String) -> Unit,
+    onAdd: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        accounts.forEach { acct ->
+            FilterChip(
+                selected = acct.id == selectedId,
+                onClick = { onSelect(acct.id) },
+                label = { Text(acct.label) },
+                leadingIcon = {
+                    Icon(
+                        Icons.Filled.AccountBalanceWallet,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                },
+                shape = RoundedCornerShape(12.dp),
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            )
+        }
+        AssistChip(
+            onClick = onAdd,
+            label = { Text("Add") },
+            leadingIcon = {
+                Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+            },
+            shape = RoundedCornerShape(12.dp),
+            colors = AssistChipDefaults.assistChipColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            )
+        )
+    }
+}
+
+@Composable
+private fun HeroBalanceCard(
+    account: Account?,
+    latest: BalanceEntry?,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onAddFirst: () -> Unit
+) {
+    val gradient = Brush.linearGradient(
+        colors = listOf(
+            MaterialTheme.colorScheme.primary,
+            MaterialTheme.colorScheme.primaryContainer
+        )
+    )
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(gradient, RoundedCornerShape(24.dp))
+        ) {
+            if (account == null) {
                 Column(
-                    modifier = Modifier.padding(20.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("Add your first account", fontWeight = FontWeight.SemiBold)
+                    Icon(
+                        Icons.Filled.AccountBalanceWallet,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimary
+                    )
                     Text(
-                        "Enter today's balance and the last 4 digits of the bank account to track. " +
-                            "Repeat for each account.",
+                        "No account yet",
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        "Add your bank account to start tracking.",
+                        color = MaterialTheme.colorScheme.onPrimary,
                         style = MaterialTheme.typography.bodySmall
                     )
-                    Button(onClick = { editingAccount = null; showAccountDialog = true }) {
+                    Spacer(Modifier.height(4.dp))
+                    Button(onClick = onAddFirst) {
                         Icon(Icons.Filled.Add, contentDescription = null)
-                        Spacer(Modifier.width(4.dp))
+                        Spacer(Modifier.width(6.dp))
                         Text("Add account")
                     }
                 }
-            }
-        }
-
-        // Permission setup
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text("Setup", fontWeight = FontWeight.SemiBold)
-                Button(onClick = {
-                    context.startActivity(
-                        Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    )
-                }) {
-                    Text(if (isNotifListenerEnabled(context)) "Notif access ✓ (review)" else "Open Notification Access")
-                }
-                OutlinedButton(onClick = {
-                    val perms = mutableListOf(
-                        Manifest.permission.RECEIVE_SMS,
-                        Manifest.permission.READ_SMS
-                    )
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        perms += Manifest.permission.POST_NOTIFICATIONS
-                    }
-                    smsPermLauncher.launch(perms.toTypedArray())
-                }) { Text("Grant SMS access") }
-                Text(
-                    "Then long-press home → Widgets → drag 'Balance Widget'.",
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-        }
-
-        // Widget opacity slider
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text("Widget look", fontWeight = FontWeight.SemiBold)
-                Text(
-                    "Background opacity — drag left to see more of your wallpaper through the widget.",
-                    style = MaterialTheme.typography.bodySmall
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Slider(
-                        value = state.widgetOpacity,
-                        onValueChange = { vm.setWidgetOpacity(it) },
-                        valueRange = 0.1f..1.0f,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Text("${(state.widgetOpacity * 100).toInt()}%", fontWeight = FontWeight.Medium)
-                }
-                Text(
-                    "Tip: changes apply next time the widget refreshes (or remove + re-add it).",
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-        }
-
-        // Sync past SMS
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text("Sync past SMS", fontWeight = FontWeight.SemiBold)
-                Text(
-                    "Scans the inbox once. Messages after calibration adjust the balance; older ones are kept as history-only.",
-                    style = MaterialTheme.typography.bodySmall
-                )
-                Button(onClick = { vm.syncPastSms() }) {
-                    Text("Scan SMS inbox now")
-                }
-                scanStatus?.let {
-                    Text(it, style = MaterialTheme.typography.bodySmall)
-                }
-            }
-        }
-
-        // Tests
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text("Test the parser", fontWeight = FontWeight.SemiBold)
-                Text(
-                    "Injects sample HDFC SMS for the currently selected account.",
-                    style = MaterialTheme.typography.bodySmall
-                )
-                val activeSuffix = selectedAccount?.suffix ?: "9504"
-                OutlinedButton(onClick = {
-                    vm.addTestMessage(
-                        "Sent Rs.500.00 From HDFC Bank A/C *$activeSuffix To Test On ${
-                            SimpleDateFormat("dd/MM/yy", Locale.getDefault()).format(Date())
-                        }"
-                    )
-                }) { Text("Inject debit ₹500") }
-                OutlinedButton(onClick = {
-                    vm.addTestMessage(
-                        "Update! INR 1,200.00 deposited in HDFC Bank A/c XX$activeSuffix on today."
-                    )
-                }) { Text("Inject credit ₹1,200") }
-                TextButton(onClick = { vm.resetAll() }) { Text("Reset everything") }
-            }
-        }
-
-        Text("Recent transactions", fontWeight = FontWeight.SemiBold)
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            if (selectedHistory.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxWidth().padding(24.dp),
-                    contentAlignment = Alignment.Center
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Available balance",
+                                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f),
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                            Text(
+                                account.label,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        Row {
+                            IconButton(onClick = onEdit) {
+                                Icon(
+                                    Icons.Filled.Edit,
+                                    contentDescription = "Re-calibrate",
+                                    tint = MaterialTheme.colorScheme.onPrimary
+                                )
+                            }
+                            IconButton(onClick = onDelete) {
+                                Icon(
+                                    Icons.Filled.Delete,
+                                    contentDescription = "Delete",
+                                    tint = MaterialTheme.colorScheme.onPrimary
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
                     Text(
-                        "No transactions yet. Calibrate above, then scan SMS or wait for the next bank message.",
+                        formatMoney(latest?.balance ?: account.startingBalance),
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        fontSize = 44.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.SansSerif
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        latest?.let {
+                            "Updated " + relativeTime(it.timestampMillis) + " • via " + it.source
+                        } ?: "Calibrated " + relativeTime(account.calibratedAt),
+                        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f),
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionHeader(
+    title: String,
+    trailing: @Composable (() -> Unit)? = null
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            title.uppercase(),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 1.sp
+        )
+        trailing?.invoke()
+    }
+}
+
+@Composable
+private fun TransactionsCard(history: List<BalanceEntry>) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+    ) {
+        Column {
+            if (history.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(28.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "No transactions yet.\nCalibrate or wait for the next bank message.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             } else {
-                selectedHistory.forEach { entry ->
+                history.forEachIndexed { idx, entry ->
                     TxnRow(entry)
-                    HorizontalDivider()
+                    if (idx < history.lastIndex) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                        )
+                    }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun WidgetLookCard(
+    opacity: Float,
+    onOpacityChange: (Float) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Filled.Tune,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("Widget look", fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.weight(1f))
+                Text(
+                    "${(opacity * 100).toInt()}%",
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            Text(
+                "Background opacity — drag left to see more wallpaper through the widget.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Slider(
+                value = opacity,
+                onValueChange = onOpacityChange,
+                valueRange = 0.1f..1.0f
+            )
+        }
+    }
+}
+
+@Composable
+private fun ExpandableSection(
+    title: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    val rotation by animateFloatAsState(if (expanded) 180f else 0f, label = "expand")
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+            onClick = onToggle
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f)
+                )
+                Icon(
+                    Icons.Filled.ExpandMore,
+                    contentDescription = if (expanded) "Collapse" else "Expand",
+                    modifier = Modifier.rotate(rotation)
+                )
+            }
+        }
+        AnimatedVisibility(visible = expanded) {
+            content()
+        }
+    }
+}
+
+@Composable
+private fun SetupCard(
+    notifEnabled: Boolean,
+    onOpenNotifSettings: () -> Unit,
+    onGrantSms: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Filled.Notifications,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("Permissions", fontWeight = FontWeight.SemiBold)
+            }
+            Button(onClick = onOpenNotifSettings, modifier = Modifier.fillMaxWidth()) {
+                Text(if (notifEnabled) "Notification access ✓" else "Open Notification Access")
+            }
+            OutlinedButton(onClick = onGrantSms, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Filled.Sms, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Grant SMS access")
+            }
+            Text(
+                "Then long-press home → Widgets → drag 'Balance Widget'.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun TestsCard(
+    activeSuffix: String,
+    onInjectDebit: () -> Unit,
+    onInjectCredit: () -> Unit,
+    onResetAll: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Filled.Science,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("Test the parser", fontWeight = FontWeight.SemiBold)
+            }
+            Text(
+                "Injects sample HDFC SMS for *$activeSuffix.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onInjectDebit, modifier = Modifier.weight(1f)) {
+                    Text("Debit ₹500")
+                }
+                OutlinedButton(onClick = onInjectCredit, modifier = Modifier.weight(1f)) {
+                    Text("Credit ₹1200")
+                }
+            }
+            TextButton(
+                onClick = onResetAll,
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Reset everything") }
         }
     }
 }
@@ -388,13 +704,15 @@ private fun AccountEditorDialog(
 ) {
     var label by remember { mutableStateOf(existing?.label ?: "") }
     var suffix by remember { mutableStateOf(existing?.suffix ?: "") }
-    var balanceText by remember { mutableStateOf(existing?.startingBalance?.let { "%.2f".format(it) } ?: "") }
+    var balanceText by remember {
+        mutableStateOf(existing?.startingBalance?.let { "%.2f".format(it) } ?: "")
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (existing == null) "Add account" else "Re-calibrate ${existing.label}") },
+        title = { Text(if (existing == null) "Add account" else "Re-calibrate") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
                     value = label,
                     onValueChange = { label = it.take(40) },
@@ -412,7 +730,9 @@ private fun AccountEditorDialog(
                 )
                 OutlinedTextField(
                     value = balanceText,
-                    onValueChange = { balanceText = it.filter { c -> c.isDigit() || c == '.' } },
+                    onValueChange = {
+                        balanceText = it.filter { c -> c.isDigit() || c == '.' }
+                    },
                     label = { Text("Current balance (₹)") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
@@ -421,7 +741,8 @@ private fun AccountEditorDialog(
                 if (existing != null) {
                     Text(
                         "Re-calibrating wipes this account's history and stamps a fresh start.",
-                        style = MaterialTheme.typography.bodySmall
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -448,46 +769,52 @@ private fun TxnRow(e: BalanceEntry) {
         isCredit -> Color(0xFF2E7D32)
         else -> MaterialTheme.colorScheme.onSurface
     }
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+        // Icon circle
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .background(color.copy(alpha = 0.12f), RoundedCornerShape(50)),
+            contentAlignment = Alignment.Center
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (isDebit || isCredit) {
-                    Icon(
-                        imageVector = if (isDebit) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
-                        contentDescription = null,
-                        tint = color
-                    )
-                }
-                Text(
-                    e.txnAmount?.let { (if (isDebit) "−" else "+") + " ₹" + formatNumber(it) }
-                        ?: e.direction,
-                    color = color,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-            Text(formatMoney(e.balance), fontWeight = FontWeight.Bold)
+            Icon(
+                imageVector = if (isCredit) Icons.Filled.ArrowDownward else Icons.Filled.ArrowUpward,
+                contentDescription = null,
+                tint = color,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                e.txnAmount?.let {
+                    (if (isDebit) "−₹" else if (isCredit) "+₹" else "₹") + formatNumber(it)
+                } ?: e.direction,
+                color = color,
+                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.titleSmall
+            )
+            Text(
+                relativeTime(e.timestampMillis) + " · " + e.source +
+                    (e.accountSuffix?.let { " · *$it" } ?: ""),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
         Text(
-            relativeTime(e.timestampMillis) + " · " + e.source +
-                (e.accountSuffix?.let { " · *$it" } ?: ""),
-            style = MaterialTheme.typography.bodySmall
+            formatMoney(e.balance),
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.titleSmall
         )
     }
 }
 
-/** Tiny helper for the horizontally scrolling chip row. */
-@Composable
-private fun Modifier.horizontalScrollable(): Modifier {
-    val state = rememberScrollState()
-    return this.then(androidx.compose.foundation.horizontalScroll(state))
-}
+// -------------------- Helpers --------------------
 
 internal fun formatMoney(v: Double): String {
     val fmt = NumberFormat.getCurrencyInstance(Locale("en", "IN"))
