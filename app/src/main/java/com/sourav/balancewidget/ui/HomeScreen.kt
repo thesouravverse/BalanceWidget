@@ -54,6 +54,7 @@ fun HomeScreen(
     vm: HomeViewModel = hiltViewModel()
 ) {
     val state by vm.uiState.collectAsStateWithLifecycle()
+    val scanStatus by vm.scanStatus.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     val notifPermLauncher = rememberLauncherForActivityResult(
@@ -156,6 +157,28 @@ fun HomeScreen(
                     "3. Long-press your home screen → Widgets → search 'Balance Widget' → drag it to home.",
                     style = MaterialTheme.typography.bodySmall
                 )
+            }
+        }
+
+        // Sync past SMS
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text("Sync past SMS", fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Reads your existing SMS inbox, finds bank messages, and seeds the widget with the latest balance. Needs SMS permission.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Button(onClick = { vm.syncPastSms() }) {
+                    Text("Scan SMS inbox now")
+                }
+                scanStatus?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall)
+                }
             }
         }
 

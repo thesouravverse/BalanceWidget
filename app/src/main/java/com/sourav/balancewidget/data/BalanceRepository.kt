@@ -42,13 +42,14 @@ class BalanceRepository @Inject constructor(
 
     val latest: Flow<BalanceEntry?> = history.map { it.firstOrNull() }
 
-    suspend fun add(parsed: BalanceParser.Parsed) {
+    suspend fun add(parsed: BalanceParser.Parsed, timestampMillis: Long = System.currentTimeMillis()) {
         val entry = BalanceEntry(
             balance = parsed.balance,
             txnAmount = parsed.txnAmount,
             direction = parsed.direction.name,
             source = parsed.source,
             sender = parsed.sender,
+            timestampMillis = timestampMillis,
             rawText = parsed.rawText
         )
         context.dataStore.edit { prefs ->
