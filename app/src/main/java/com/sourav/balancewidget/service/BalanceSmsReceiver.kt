@@ -25,18 +25,14 @@ class BalanceSmsReceiver : BroadcastReceiver() {
         if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
         val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent) ?: return
 
-        // Group by sender to combine multipart SMS
         val bySender = messages.groupBy { it.originatingAddress.orEmpty() }
         for ((sender, parts) in bySender) {
             val body = parts.joinToString("") { it.messageBody.orEmpty() }
-            val parsed = BalanceParser.parse(
-                text = body,
-                source = "SMS",
-                sender = sender
-            ) ?: continue
+            val parsed = BalanceParser.parseTxn(body, source = "SMS", sender = sender) ?: continue
             scope.launch {
-                repo.add(parsed)
-                runCatching { BalanceWidget().updateAll(context) }
+                if (repo.applyTxn(parsed)) {
+                    runCatching { BalanceWidget().updateAll(context) }
+                }
             }
         }
     }

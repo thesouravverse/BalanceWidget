@@ -1,7 +1,9 @@
 package com.sourav.balancewidget.data
 
 import android.content.Context
+import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.sourav.balancewidget.parser.BalanceParser
@@ -21,11 +23,19 @@ private val Context.dataStore by preferencesDataStore(name = "balance_widget")
 data class BalanceEntry(
     val balance: Double,
     val txnAmount: Double? = null,
-    val direction: String = "UNKNOWN", // DEBIT / CREDIT / UNKNOWN
+    val direction: String = "UNKNOWN",
     val source: String = "SMS",
     val sender: String? = null,
+    val accountSuffix: String? = null,
     val timestampMillis: Long = System.currentTimeMillis(),
     val rawText: String = ""
+)
+
+@Serializable
+data class Config(
+    val startingBalance: Double,
+    val accountSuffix: String, // last 4 digits the user is tracking, e.g. "9504"
+    val calibratedAt: Long
 )
 
 @Singleton
@@ -33,7 +43,10 @@ class BalanceRepository @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     private val historyKey = stringPreferencesKey("history_json")
-    private val maxHistory = 100
+    private val startBalKey = doublePreferencesKey("config_start_balance")
+    private val acctSuffixKey = stringPreferencesKey("config_account_suffix")
+    private val calibratedAtKey = longPreferencesKey("config_calibrated_at")
+    private val maxHistory = 200
 
     val history: Flow<List<BalanceEntry>> = context.dataStore.data.map { prefs ->
         prefs[historyKey]?.let { runCatching { Json.decodeFromString<List<BalanceEntry>>(it) }.getOrNull() }
@@ -42,35 +55,107 @@ class BalanceRepository @Inject constructor(
 
     val latest: Flow<BalanceEntry?> = history.map { it.firstOrNull() }
 
-    suspend fun add(parsed: BalanceParser.Parsed, timestampMillis: Long = System.currentTimeMillis()) {
-        val entry = BalanceEntry(
-            balance = parsed.balance,
-            txnAmount = parsed.txnAmount,
-            direction = parsed.direction.name,
-            source = parsed.source,
-            sender = parsed.sender,
-            timestampMillis = timestampMillis,
-            rawText = parsed.rawText
+    val config: Flow<Config?> = context.dataStore.data.map { prefs ->
+        val bal = prefs[startBalKey]
+        val suffix = prefs[acctSuffixKey]
+        val at = prefs[calibratedAtKey]
+        if (bal != null && suffix != null && at != null) Config(bal, suffix, at) else null
+    }
+
+    suspend fun configSnapshot(): Config? = config.first()
+
+    /** Set or replace calibration. Clears history and seeds a starting entry. */
+    suspend fun calibrate(startingBalance: Double, accountSuffix: String) {
+        val now = System.currentTimeMillis()
+        val seed = BalanceEntry(
+            balance = startingBalance,
+            txnAmount = null,
+            direction = "OPENING",
+            source = "CALIBRATION",
+            accountSuffix = accountSuffix,
+            timestampMillis = now,
+            rawText = "Calibrated to ₹%,.2f for account *%s".format(startingBalance, accountSuffix)
         )
+        context.dataStore.edit { prefs ->
+            prefs[startBalKey] = startingBalance
+            prefs[acctSuffixKey] = accountSuffix
+            prefs[calibratedAtKey] = now
+            prefs[historyKey] = Json.encodeToString(listOf(seed))
+        }
+    }
+
+    /**
+     * Apply a parsed transaction if it matches the configured account suffix
+     * and the timestamp is at-or-after calibration. Computes new balance ourselves.
+     * Returns true if applied.
+     */
+    suspend fun applyTxn(
+        parsed: BalanceParser.ParsedTxn,
+        timestampMillis: Long = System.currentTimeMillis()
+    ): Boolean {
+        val cfg = configSnapshot() ?: return false
+        // Filter: must match account suffix (endsWith handles 4-vs-6 digit cases)
+        val parsedSuffix = parsed.accountSuffix ?: return false
+        if (!parsedSuffix.endsWith(cfg.accountSuffix) && !cfg.accountSuffix.endsWith(parsedSuffix)) return false
+        if (timestampMillis < cfg.calibratedAt) return false
+
         context.dataStore.edit { prefs ->
             val current = prefs[historyKey]
                 ?.let { runCatching { Json.decodeFromString<List<BalanceEntry>>(it) }.getOrNull() }
                 ?: emptyList()
-            // dedupe: skip if last entry has same balance + same raw text within 60s
+
+            // dedupe: same raw + amount within 60s
             val last = current.firstOrNull()
             if (last != null &&
-                last.balance == entry.balance &&
-                last.rawText == entry.rawText &&
-                (entry.timestampMillis - last.timestampMillis) < 60_000
+                last.rawText == parsed.rawText &&
+                (timestampMillis - last.timestampMillis) < 60_000
             ) return@edit
+
+            val lastBalance = last?.balance ?: cfg.startingBalance
+            val newBalance = when (parsed.direction) {
+                BalanceParser.Direction.DEBIT -> lastBalance - parsed.amount
+                BalanceParser.Direction.CREDIT -> lastBalance + parsed.amount
+                else -> lastBalance
+            }
+            // Prefer bank-provided balance if present and reasonable
+            val finalBalance = parsed.balanceFromBank ?: newBalance
+
+            val entry = BalanceEntry(
+                balance = finalBalance,
+                txnAmount = parsed.amount,
+                direction = parsed.direction.name,
+                source = parsed.source,
+                sender = parsed.sender,
+                accountSuffix = parsedSuffix,
+                timestampMillis = timestampMillis,
+                rawText = parsed.rawText
+            )
             val updated = (listOf(entry) + current).take(maxHistory)
             prefs[historyKey] = Json.encodeToString(updated)
         }
+        return true
     }
 
-    suspend fun clear() {
-        context.dataStore.edit { it.remove(historyKey) }
+    suspend fun clearHistoryKeepConfig() {
+        val cfg = configSnapshot()
+        context.dataStore.edit { prefs ->
+            if (cfg != null) {
+                val seed = BalanceEntry(
+                    balance = cfg.startingBalance,
+                    direction = "OPENING",
+                    source = "CALIBRATION",
+                    accountSuffix = cfg.accountSuffix,
+                    timestampMillis = cfg.calibratedAt,
+                    rawText = "Re-seeded from calibration"
+                )
+                prefs[historyKey] = Json.encodeToString(listOf(seed))
+            } else {
+                prefs.remove(historyKey)
+            }
+        }
     }
 
-    suspend fun latestSnapshot(): BalanceEntry? = latest.first()
+    suspend fun resetAll() {
+        context.dataStore.edit { it.clear() }
+    }
 }

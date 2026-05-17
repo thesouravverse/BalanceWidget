@@ -2,7 +2,6 @@ package com.sourav.balancewidget.service
 
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
-import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.updateAll
 import com.sourav.balancewidget.data.BalanceRepository
 import com.sourav.balancewidget.parser.BalanceParser
@@ -29,17 +28,15 @@ class BalanceNotificationListener : NotificationListenerService() {
         val combined = listOf(title, text, bigText).filter { it.isNotBlank() }.joinToString(" \n ")
         if (combined.isBlank()) return
 
-        val parsed = BalanceParser.parse(
+        val parsed = BalanceParser.parseTxn(
             text = combined,
             source = "NOTIFICATION",
             sender = sbn.packageName
         ) ?: return
 
         scope.launch {
-            repo.add(parsed)
-            runCatching {
-                BalanceWidget().updateAll(applicationContext)
-                GlanceAppWidgetManager(applicationContext)
+            if (repo.applyTxn(parsed)) {
+                runCatching { BalanceWidget().updateAll(applicationContext) }
             }
         }
     }

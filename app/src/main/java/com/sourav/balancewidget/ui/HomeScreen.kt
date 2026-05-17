@@ -28,18 +28,23 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sourav.balancewidget.data.BalanceEntry
@@ -57,13 +62,12 @@ fun HomeScreen(
     val scanStatus by vm.scanStatus.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
-    val notifPermLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { /* result ignored */ }
-
     val smsPermLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) { /* result ignored */ }
+    ) { /* ignored */ }
+
+    var startBalText by remember { mutableStateOf("") }
+    var suffixText by remember { mutableStateOf("") }
 
     Column(
         modifier = modifier
@@ -71,7 +75,6 @@ fun HomeScreen(
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Header
         Text(
             "Balance Widget",
             style = MaterialTheme.typography.headlineSmall,
@@ -92,7 +95,7 @@ fun HomeScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    "Available balance",
+                    state.config?.let { "Account *${it.accountSuffix}" } ?: "Not calibrated",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
@@ -114,6 +117,52 @@ fun HomeScreen(
             }
         }
 
+        // Calibration
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text("Calibrate balance", fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Enter today's balance + the last 4 digits of the bank account you want to track. " +
+                        "From now on, every debit/credit SMS for THAT account adjusts the balance.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                OutlinedTextField(
+                    value = startBalText,
+                    onValueChange = { startBalText = it.filter { c -> c.isDigit() || c == '.' } },
+                    label = { Text("Current balance (₹)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = suffixText,
+                    onValueChange = { suffixText = it.filter { c -> c.isDigit() }.take(6) },
+                    label = { Text("Account last 4 digits (e.g. 9504)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                Button(
+                    enabled = startBalText.toDoubleOrNull() != null && suffixText.length >= 4,
+                    onClick = {
+                        vm.calibrate(startBalText.toDouble(), suffixText)
+                    }
+                ) { Text(if (state.config == null) "Save calibration" else "Re-calibrate") }
+                state.config?.let {
+                    Text(
+                        "Active: ₹%,.2f starting · account *%s · calibrated %s"
+                            .format(it.startingBalance, it.accountSuffix, relativeTime(it.calibratedAt)),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        }
+
         // Permission setup
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(
@@ -123,10 +172,6 @@ fun HomeScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text("Setup", fontWeight = FontWeight.SemiBold)
-                Text(
-                    "1. Grant Notification Access so we can read bank notifications.",
-                    style = MaterialTheme.typography.bodySmall
-                )
                 Button(
                     onClick = {
                         context.startActivity(
@@ -136,10 +181,6 @@ fun HomeScreen(
                     }
                 ) { Text(if (isNotifListenerEnabled(context)) "Notif access ✓ (review)" else "Open Notification Access") }
 
-                Text(
-                    "2. (Optional) Grant SMS permission as a fallback for banks that only send raw SMS.",
-                    style = MaterialTheme.typography.bodySmall
-                )
                 OutlinedButton(
                     onClick = {
                         val perms = mutableListOf(
@@ -154,7 +195,7 @@ fun HomeScreen(
                 ) { Text("Grant SMS access") }
 
                 Text(
-                    "3. Long-press your home screen → Widgets → search 'Balance Widget' → drag it to home.",
+                    "Then long-press home → Widgets → drag 'Balance Widget'.",
                     style = MaterialTheme.typography.bodySmall
                 )
             }
@@ -170,7 +211,7 @@ fun HomeScreen(
             ) {
                 Text("Sync past SMS", fontWeight = FontWeight.SemiBold)
                 Text(
-                    "Reads your existing SMS inbox, finds bank messages, and seeds the widget with the latest balance. Needs SMS permission.",
+                    "Scans existing SMS since calibration time, applies every debit/credit for the tracked account.",
                     style = MaterialTheme.typography.bodySmall
                 )
                 Button(onClick = { vm.syncPastSms() }) {
@@ -182,7 +223,7 @@ fun HomeScreen(
             }
         }
 
-        // Debug / test row
+        // Tests
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(
                 modifier = Modifier
@@ -192,22 +233,24 @@ fun HomeScreen(
             ) {
                 Text("Test the parser", fontWeight = FontWeight.SemiBold)
                 Text(
-                    "Tap to inject a fake HDFC SMS so the widget updates without waiting for a real txn.",
+                    "Inject sample HDFC SMS (uses your tracked account suffix).",
                     style = MaterialTheme.typography.bodySmall
                 )
                 OutlinedButton(onClick = {
+                    val suffix = state.config?.accountSuffix ?: "9504"
                     vm.addTestMessage(
-                        "Sent Rs.500.00 From HDFC Bank A/C *1234 To Test On ${
+                        "Sent Rs.500.00 From HDFC Bank A/C *$suffix To Test On ${
                             SimpleDateFormat("dd/MM/yy", Locale.getDefault()).format(Date())
-                        }. Avl Bal:Rs.12,345.67"
+                        }"
                     )
-                }) { Text("Inject debit (500) → bal 12,345.67") }
+                }) { Text("Inject debit ₹500") }
                 OutlinedButton(onClick = {
+                    val suffix = state.config?.accountSuffix ?: "9504"
                     vm.addTestMessage(
-                        "Update! INR 1,200.00 deposited in HDFC Bank A/c XX1234 . Avl bal INR 14,545.67"
+                        "Update! INR 1,200.00 deposited in HDFC Bank A/c XX$suffix on today."
                     )
-                }) { Text("Inject credit (1,200) → bal 14,545.67") }
-                TextButton(onClick = { vm.clearHistory() }) { Text("Clear history") }
+                }) { Text("Inject credit ₹1,200") }
+                TextButton(onClick = { vm.resetAll() }) { Text("Reset everything") }
             }
         }
 
@@ -229,7 +272,7 @@ fun HomeScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            "No transactions yet. Inject a test message above or wait for a bank message.",
+                            "No transactions yet. Calibrate above, then scan SMS or wait for the next bank message.",
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
@@ -242,7 +285,12 @@ fun HomeScreen(
 @Composable
 private fun TxnRow(e: BalanceEntry) {
     val isDebit = e.direction == "DEBIT"
-    val color = if (isDebit) Color(0xFFD32F2F) else Color(0xFF2E7D32)
+    val isCredit = e.direction == "CREDIT"
+    val color = when {
+        isDebit -> Color(0xFFD32F2F)
+        isCredit -> Color(0xFF2E7D32)
+        else -> MaterialTheme.colorScheme.onSurface
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -254,61 +302,58 @@ private fun TxnRow(e: BalanceEntry) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            androidx.compose.foundation.layout.Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (e.txnAmount != null && e.direction != "UNKNOWN") {
+            androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.CenterVertically) {
+                if (isDebit || isCredit) {
                     Icon(
-                        imageVector = if (isDebit) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
+                        imageVector = if (isDebit) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
                         contentDescription = null,
                         tint = color
                     )
-                    Spacer(Modifier.fillMaxWidth(0.02f))
-                    Text(
-                        (if (isDebit) "-" else "+") + formatMoney(e.txnAmount),
-                        color = color,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                } else {
-                    Text("Balance update", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(0.dp))
                 }
+                Text(
+                    e.txnAmount?.let { (if (isDebit) "−" else "+") + " ₹" + formatNumber(it) }
+                        ?: e.direction,
+                    color = color,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
-            Text("Bal " + formatMoney(e.balance), fontWeight = FontWeight.Medium)
+            Text(formatMoney(e.balance), fontWeight = FontWeight.Bold)
         }
         Text(
-            text = (e.sender ?: "—") + " • " + relativeTime(e.timestampMillis),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            relativeTime(e.timestampMillis) + " · " + e.source +
+                (e.accountSuffix?.let { " · *$it" } ?: ""),
+            style = MaterialTheme.typography.bodySmall
         )
     }
 }
 
-private fun formatMoney(amount: Double): String {
-    val nf = NumberFormat.getInstance(Locale("en", "IN"))
-    nf.maximumFractionDigits = 2
-    nf.minimumFractionDigits = 2
-    return "₹" + nf.format(amount)
+internal fun formatMoney(v: Double): String {
+    val fmt = NumberFormat.getCurrencyInstance(Locale("en", "IN"))
+    return fmt.format(v)
 }
 
-private fun relativeTime(ts: Long): String {
-    val diff = System.currentTimeMillis() - ts
-    val mins = diff / 60_000
-    val hrs = diff / 3_600_000
-    val days = diff / 86_400_000
+private fun formatNumber(v: Double): String =
+    NumberFormat.getNumberInstance(Locale("en", "IN")).format(v)
+
+internal fun relativeTime(timestamp: Long): String {
+    val now = System.currentTimeMillis()
+    val diff = now - timestamp
     return when {
-        mins < 1 -> "just now"
-        mins < 60 -> "${mins}m ago"
-        hrs < 24 -> "${hrs}h ago"
-        else -> "${days}d ago"
+        diff < 60_000 -> "just now"
+        diff < 3_600_000 -> "${diff / 60_000} min ago"
+        diff < 86_400_000 -> "${diff / 3_600_000} h ago"
+        diff < 7 * 86_400_000L -> "${diff / 86_400_000} d ago"
+        else -> SimpleDateFormat("dd MMM, HH:mm", Locale.getDefault()).format(Date(timestamp))
     }
 }
 
-private fun isNotifListenerEnabled(context: Context): Boolean {
+internal fun isNotifListenerEnabled(context: Context): Boolean {
     val flat = Settings.Secure.getString(
         context.contentResolver,
         "enabled_notification_listeners"
     ) ?: return false
     if (TextUtils.isEmpty(flat)) return false
     val pkg = context.packageName
-    return flat.split(":").any { it.startsWith(pkg) }
+    return flat.split(":").any { it.contains(pkg) }
 }

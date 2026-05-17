@@ -9,10 +9,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Reads past SMS from the device inbox, parses bank messages, and seeds the
- * repository with historical entries. Requires READ_SMS permission.
- *
- * Returns a summary of what was found.
+ * Reads past SMS from device inbox and applies bank transactions to the repo.
+ * Only txns at-or-after calibration time AND matching the configured account suffix are applied.
  */
 @Singleton
 class SmsInboxScanner @Inject constructor(
@@ -22,23 +20,26 @@ class SmsInboxScanner @Inject constructor(
     data class ScanResult(
         val totalScanned: Int,
         val bankMessages: Int,
-        val parsedWithBalance: Int,
-        val latestBalance: Double? = null
+        val matchingTxns: Int,
+        val applied: Int
     )
 
-    suspend fun scanInbox(maxMessages: Int = 500): ScanResult {
+    suspend fun scanInbox(maxMessages: Int = 1000): ScanResult {
+        val cfg = repo.configSnapshot()
+            ?: return ScanResult(0, 0, 0, 0)
+
         val uri: Uri = Telephony.Sms.Inbox.CONTENT_URI
         val projection = arrayOf(
             Telephony.Sms.ADDRESS,
             Telephony.Sms.BODY,
             Telephony.Sms.DATE
         )
-        // Newest first so we cap at maxMessages
         val sortOrder = "${Telephony.Sms.DATE} DESC LIMIT $maxMessages"
 
-        val parsedList = mutableListOf<Pair<Long, BalanceParser.Parsed>>()
+        val candidates = mutableListOf<Triple<Long, String, BalanceParser.ParsedTxn>>()
         var totalScanned = 0
         var bankMessages = 0
+        var matchingTxns = 0
 
         context.contentResolver.query(uri, projection, null, null, sortOrder)?.use { cursor ->
             val addrIdx = cursor.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)
@@ -51,22 +52,28 @@ class SmsInboxScanner @Inject constructor(
                 val date = cursor.getLong(dateIdx)
                 if (!BalanceParser.looksLikeBankMessage(body, sender)) continue
                 bankMessages++
-                val parsed = BalanceParser.parse(body, source = "SMS", sender = sender) ?: continue
-                parsedList += date to parsed
+                if (date < cfg.calibratedAt) continue
+                val parsed = BalanceParser.parseTxn(body, source = "SMS", sender = sender) ?: continue
+                val suffix = parsed.accountSuffix ?: continue
+                if (!suffix.endsWith(cfg.accountSuffix) && !cfg.accountSuffix.endsWith(suffix)) continue
+                matchingTxns++
+                candidates += Triple(date, sender, parsed)
             }
         }
 
-        // Insert oldest-first so the most recent ends up at the top of history.
-        parsedList.sortBy { it.first }
-        for ((date, p) in parsedList) {
-            repo.add(p, timestampMillis = date)
+        // Reset history to opening seed, then apply oldest-first so balance walks forward
+        repo.clearHistoryKeepConfig()
+        candidates.sortBy { it.first }
+        var applied = 0
+        for ((date, _, p) in candidates) {
+            if (repo.applyTxn(p, timestampMillis = date)) applied++
         }
 
         return ScanResult(
             totalScanned = totalScanned,
             bankMessages = bankMessages,
-            parsedWithBalance = parsedList.size,
-            latestBalance = parsedList.maxByOrNull { it.first }?.second?.balance
+            matchingTxns = matchingTxns,
+            applied = applied
         )
     }
 }
