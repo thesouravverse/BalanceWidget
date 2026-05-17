@@ -80,8 +80,14 @@ class HomeViewModel @Inject constructor(
         _scanStatus.value = "Scanning inbox…"
         try {
             val r = smsScanner.scanInbox()
-            _scanStatus.value = "Scanned ${r.totalScanned} SMS · ${r.bankMessages} bank · " +
-                "${r.matchingTxns} for *${cfg.accountSuffix} · applied ${r.applied}"
+            val topStr = if (r.topSuffixes.isEmpty()) "none"
+                else r.topSuffixes.joinToString(", ") { "*${it.first}(${it.second})" }
+            _scanStatus.value = buildString {
+                append("Scanned ${r.totalScanned} SMS · ${r.bankMessages} bank · parsed ${r.parsedTxns}\n")
+                append("Top suffixes found: $topStr\n")
+                append("Matching *${cfg.accountSuffix}: ${r.matchingTxns} · applied ${r.applied}\n")
+                append("(Balance unchanged — past txns are history-only.)")
+            }
             BalanceWidget().updateAll(appContext)
         } catch (e: SecurityException) {
             _scanStatus.value = "Need SMS permission — tap 'Grant SMS access' first."

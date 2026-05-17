@@ -9,8 +9,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Reads past SMS from device inbox and applies bank transactions to the repo.
- * Only txns at-or-after calibration time AND matching the configured account suffix are applied.
+ * Reads past SMS from device inbox and seeds history for the configured account.
+ * Past txns are stored for VIEWING only — they do NOT change the calibrated balance,
+ * because the user calibrated to the *current* balance which already reflects them.
  */
 @Singleton
 class SmsInboxScanner @Inject constructor(
@@ -20,13 +21,15 @@ class SmsInboxScanner @Inject constructor(
     data class ScanResult(
         val totalScanned: Int,
         val bankMessages: Int,
+        val parsedTxns: Int,
         val matchingTxns: Int,
-        val applied: Int
+        val applied: Int,
+        val topSuffixes: List<Pair<String, Int>> // for debugging
     )
 
     suspend fun scanInbox(maxMessages: Int = 1000): ScanResult {
         val cfg = repo.configSnapshot()
-            ?: return ScanResult(0, 0, 0, 0)
+            ?: return ScanResult(0, 0, 0, 0, 0, emptyList())
 
         val uri: Uri = Telephony.Sms.Inbox.CONTENT_URI
         val projection = arrayOf(
@@ -37,8 +40,10 @@ class SmsInboxScanner @Inject constructor(
         val sortOrder = "${Telephony.Sms.DATE} DESC LIMIT $maxMessages"
 
         val candidates = mutableListOf<Triple<Long, String, BalanceParser.ParsedTxn>>()
+        val suffixCounts = mutableMapOf<String, Int>()
         var totalScanned = 0
         var bankMessages = 0
+        var parsedTxns = 0
         var matchingTxns = 0
 
         context.contentResolver.query(uri, projection, null, null, sortOrder)?.use { cursor ->
@@ -52,28 +57,36 @@ class SmsInboxScanner @Inject constructor(
                 val date = cursor.getLong(dateIdx)
                 if (!BalanceParser.looksLikeBankMessage(body, sender)) continue
                 bankMessages++
-                if (date < cfg.calibratedAt) continue
                 val parsed = BalanceParser.parseTxn(body, source = "SMS", sender = sender) ?: continue
+                parsedTxns++
                 val suffix = parsed.accountSuffix ?: continue
+                suffixCounts[suffix] = (suffixCounts[suffix] ?: 0) + 1
                 if (!suffix.endsWith(cfg.accountSuffix) && !cfg.accountSuffix.endsWith(suffix)) continue
                 matchingTxns++
                 candidates += Triple(date, sender, parsed)
             }
         }
 
-        // Reset history to opening seed, then apply oldest-first so balance walks forward
-        repo.clearHistoryKeepConfig()
+        // Apply oldest-first so history list stays chronological.
+        // applyToBalance=false: balance stays at calibrated value; entries are info-only.
         candidates.sortBy { it.first }
         var applied = 0
         for ((date, _, p) in candidates) {
-            if (repo.applyTxn(p, timestampMillis = date)) applied++
+            if (repo.applyTxn(p, timestampMillis = date, applyToBalance = false)) applied++
         }
+
+        val topSuffixes = suffixCounts.entries
+            .sortedByDescending { it.value }
+            .take(5)
+            .map { it.key to it.value }
 
         return ScanResult(
             totalScanned = totalScanned,
             bankMessages = bankMessages,
+            parsedTxns = parsedTxns,
             matchingTxns = matchingTxns,
-            applied = applied
+            applied = applied,
+            topSuffixes = topSuffixes
         )
     }
 }

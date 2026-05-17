@@ -85,26 +85,26 @@ class BalanceRepository @Inject constructor(
     }
 
     /**
-     * Apply a parsed transaction if it matches the configured account suffix
-     * and the timestamp is at-or-after calibration. Computes new balance ourselves.
+     * Apply a parsed transaction if it matches the configured account suffix.
+     * @param applyToBalance when true (real-time SMS), compute new running balance.
+     *                      When false (historical scan), keep balance the same — entry is informational.
      * Returns true if applied.
      */
     suspend fun applyTxn(
         parsed: BalanceParser.ParsedTxn,
-        timestampMillis: Long = System.currentTimeMillis()
+        timestampMillis: Long = System.currentTimeMillis(),
+        applyToBalance: Boolean = true
     ): Boolean {
         val cfg = configSnapshot() ?: return false
-        // Filter: must match account suffix (endsWith handles 4-vs-6 digit cases)
         val parsedSuffix = parsed.accountSuffix ?: return false
         if (!parsedSuffix.endsWith(cfg.accountSuffix) && !cfg.accountSuffix.endsWith(parsedSuffix)) return false
-        if (timestampMillis < cfg.calibratedAt) return false
 
         context.dataStore.edit { prefs ->
             val current = prefs[historyKey]
                 ?.let { runCatching { Json.decodeFromString<List<BalanceEntry>>(it) }.getOrNull() }
                 ?: emptyList()
 
-            // dedupe: same raw + amount within 60s
+            // dedupe: same raw within 60s
             val last = current.firstOrNull()
             if (last != null &&
                 last.rawText == parsed.rawText &&
@@ -112,13 +112,14 @@ class BalanceRepository @Inject constructor(
             ) return@edit
 
             val lastBalance = last?.balance ?: cfg.startingBalance
-            val newBalance = when (parsed.direction) {
-                BalanceParser.Direction.DEBIT -> lastBalance - parsed.amount
-                BalanceParser.Direction.CREDIT -> lastBalance + parsed.amount
-                else -> lastBalance
-            }
-            // Prefer bank-provided balance if present and reasonable
-            val finalBalance = parsed.balanceFromBank ?: newBalance
+            val newBalance = if (applyToBalance) {
+                when (parsed.direction) {
+                    BalanceParser.Direction.DEBIT -> lastBalance - parsed.amount
+                    BalanceParser.Direction.CREDIT -> lastBalance + parsed.amount
+                    else -> lastBalance
+                }
+            } else lastBalance
+            val finalBalance = if (applyToBalance) (parsed.balanceFromBank ?: newBalance) else lastBalance
 
             val entry = BalanceEntry(
                 balance = finalBalance,
@@ -130,7 +131,10 @@ class BalanceRepository @Inject constructor(
                 timestampMillis = timestampMillis,
                 rawText = parsed.rawText
             )
-            val updated = (listOf(entry) + current).take(maxHistory)
+            // Insert keeping list sorted newest-first
+            val updated = (listOf(entry) + current)
+                .sortedByDescending { it.timestampMillis }
+                .take(maxHistory)
             prefs[historyKey] = Json.encodeToString(updated)
         }
         return true
