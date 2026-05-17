@@ -4,9 +4,9 @@ import android.content.Context
 import androidx.glance.appwidget.updateAll
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.sourav.balancewidget.data.Account
 import com.sourav.balancewidget.data.BalanceEntry
 import com.sourav.balancewidget.data.BalanceRepository
-import com.sourav.balancewidget.data.Config
 import com.sourav.balancewidget.data.SmsInboxScanner
 import com.sourav.balancewidget.parser.BalanceParser
 import com.sourav.balancewidget.widget.BalanceWidget
@@ -23,9 +23,10 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class HomeUiState(
-    val latest: BalanceEntry? = null,
+    val accounts: List<Account> = emptyList(),
     val history: List<BalanceEntry> = emptyList(),
-    val config: Config? = null
+    val latestByAccount: Map<String, BalanceEntry> = emptyMap(),
+    val widgetOpacity: Float = 1f
 )
 
 @HiltViewModel
@@ -35,21 +36,48 @@ class HomeViewModel @Inject constructor(
     private val smsScanner: SmsInboxScanner
 ) : ViewModel() {
 
+    init {
+        viewModelScope.launch(Dispatchers.IO) {
+            repo.migrateLegacyIfNeeded()
+        }
+    }
+
     val uiState: StateFlow<HomeUiState> = combine(
-        repo.latest,
+        repo.accounts,
         repo.history,
-        repo.config
-    ) { latest, history, config ->
-        HomeUiState(latest = latest, history = history, config = config)
+        repo.latestByAccount,
+        repo.widgetOpacity
+    ) { accounts, history, latest, opacity ->
+        HomeUiState(
+            accounts = accounts,
+            history = history,
+            latestByAccount = latest,
+            widgetOpacity = opacity
+        )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 
     private val _scanStatus = MutableStateFlow<String?>(null)
     val scanStatus: StateFlow<String?> = _scanStatus.asStateFlow()
 
-    fun calibrate(startingBalance: Double, accountSuffix: String) = viewModelScope.launch(Dispatchers.IO) {
-        repo.calibrate(startingBalance, accountSuffix)
+    fun addOrUpdateAccount(
+        id: String?,
+        label: String,
+        suffix: String,
+        startingBalance: Double
+    ) = viewModelScope.launch(Dispatchers.IO) {
+        repo.addOrUpdateAccount(id = id, label = label, suffix = suffix, startingBalance = startingBalance)
         BalanceWidget().updateAll(appContext)
-        _scanStatus.value = "Calibrated. Now scan SMS or wait for the next bank message."
+        _scanStatus.value = "Calibrated. Future SMS for *$suffix will adjust this balance."
+    }
+
+    fun deleteAccount(id: String) = viewModelScope.launch(Dispatchers.IO) {
+        repo.deleteAccount(id)
+        BalanceWidget().updateAll(appContext)
+    }
+
+    fun setWidgetOpacity(opacity: Float) = viewModelScope.launch(Dispatchers.IO) {
+        repo.setWidgetOpacity(opacity)
+        BalanceWidget().updateAll(appContext)
     }
 
     fun resetAll() = viewModelScope.launch(Dispatchers.IO) {
@@ -58,7 +86,6 @@ class HomeViewModel @Inject constructor(
         _scanStatus.value = null
     }
 
-    /** Inject a fake bank SMS for parser testing. Requires calibration first. */
     fun addTestMessage(raw: String) = viewModelScope.launch(Dispatchers.IO) {
         val parsed = BalanceParser.parseTxn(raw, source = "TEST", sender = "TEST")
         if (parsed == null) {
@@ -68,13 +95,13 @@ class HomeViewModel @Inject constructor(
         val applied = repo.applyTxn(parsed)
         BalanceWidget().updateAll(appContext)
         _scanStatus.value = if (applied) "Test txn applied." else
-            "Test ignored — calibrate first OR account suffix didn't match."
+            "Test ignored — add an account whose suffix matches first."
     }
 
     fun syncPastSms() = viewModelScope.launch(Dispatchers.IO) {
-        val cfg = repo.configSnapshot()
-        if (cfg == null) {
-            _scanStatus.value = "Calibrate first (enter balance + account last-4)."
+        val accounts = repo.accountsSnapshot()
+        if (accounts.isEmpty()) {
+            _scanStatus.value = "Add at least one account first."
             return@launch
         }
         _scanStatus.value = "Scanning inbox…"
@@ -82,12 +109,12 @@ class HomeViewModel @Inject constructor(
             val r = smsScanner.scanInbox()
             val topStr = if (r.topSuffixes.isEmpty()) "none"
                 else r.topSuffixes.joinToString(", ") { "*${it.first}(${it.second})" }
+            val acctList = accounts.joinToString(", ") { "*${it.suffix}" }
             _scanStatus.value = buildString {
                 append("Scanned ${r.totalScanned} SMS · ${r.bankMessages} bank · parsed ${r.parsedTxns}\n")
                 append("Top suffixes found: $topStr\n")
-                append("Matching *${cfg.accountSuffix}: ${r.matchingTxns}\n")
-                append("Applied to balance (since calibration): ${r.appliedToBalance}\n")
-                append("History-only (before calibration): ${r.historyOnly}")
+                append("Tracking: $acctList\n")
+                append("Matched: ${r.matchingTxns} · applied: ${r.appliedToBalance} · history-only: ${r.historyOnly}")
             }
             BalanceWidget().updateAll(appContext)
         } catch (e: SecurityException) {

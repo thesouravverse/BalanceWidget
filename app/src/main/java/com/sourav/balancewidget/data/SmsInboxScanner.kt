@@ -9,9 +9,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Reads past SMS from device inbox and seeds history for the configured account.
- * Past txns are stored for VIEWING only — they do NOT change the calibrated balance,
- * because the user calibrated to the *current* balance which already reflects them.
+ * Scans the SMS inbox once and routes each parsed transaction to whichever
+ * configured account matches the suffix. Post-calibration txns adjust balance;
+ * pre-calibration txns are stored as history-only.
  */
 @Singleton
 class SmsInboxScanner @Inject constructor(
@@ -23,14 +23,16 @@ class SmsInboxScanner @Inject constructor(
         val bankMessages: Int,
         val parsedTxns: Int,
         val matchingTxns: Int,
-        val appliedToBalance: Int, // post-calibration, changed balance
-        val historyOnly: Int,      // pre-calibration, info only
+        val appliedToBalance: Int,
+        val historyOnly: Int,
         val topSuffixes: List<Pair<String, Int>>
     )
 
     suspend fun scanInbox(maxMessages: Int = 1000): ScanResult {
-        val cfg = repo.configSnapshot()
-            ?: return ScanResult(0, 0, 0, 0, 0, 0, emptyList())
+        val accounts = repo.accountsSnapshot()
+        if (accounts.isEmpty()) {
+            return ScanResult(0, 0, 0, 0, 0, 0, emptyList())
+        }
 
         val uri: Uri = Telephony.Sms.Inbox.CONTENT_URI
         val projection = arrayOf(
@@ -40,12 +42,18 @@ class SmsInboxScanner @Inject constructor(
         )
         val sortOrder = "${Telephony.Sms.DATE} DESC LIMIT $maxMessages"
 
-        val candidates = mutableListOf<Triple<Long, String, BalanceParser.ParsedTxn>>()
+        // Triple<date, parsed, matchedAccountCalibratedAt>
+        data class Candidate(
+            val date: Long,
+            val parsed: BalanceParser.ParsedTxn,
+            val accountCalibratedAt: Long
+        )
+
+        val candidates = mutableListOf<Candidate>()
         val suffixCounts = mutableMapOf<String, Int>()
         var totalScanned = 0
         var bankMessages = 0
         var parsedTxns = 0
-        var matchingTxns = 0
 
         context.contentResolver.query(uri, projection, null, null, sortOrder)?.use { cursor ->
             val addrIdx = cursor.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)
@@ -62,22 +70,20 @@ class SmsInboxScanner @Inject constructor(
                 parsedTxns++
                 val suffix = parsed.accountSuffix ?: continue
                 suffixCounts[suffix] = (suffixCounts[suffix] ?: 0) + 1
-                if (!suffix.endsWith(cfg.accountSuffix) && !cfg.accountSuffix.endsWith(suffix)) continue
-                matchingTxns++
-                candidates += Triple(date, sender, parsed)
+                val matched = accounts.firstOrNull { acct ->
+                    suffix.endsWith(acct.suffix) || acct.suffix.endsWith(suffix)
+                } ?: continue
+                candidates += Candidate(date, parsed, matched.calibratedAt)
             }
         }
 
-        // Apply oldest-first so history list stays chronological.
-        // Post-calibration txns: deduct/credit from balance (the real monthly tracker).
-        // Pre-calibration txns: stored as history-only (no balance change) — already
-        // baked into the user-entered current balance.
-        candidates.sortBy { it.first }
+        // oldest first so balance evolves chronologically
+        candidates.sortBy { it.date }
         var appliedToBalance = 0
         var historyOnly = 0
-        for ((date, _, p) in candidates) {
-            val applyToBalance = date >= cfg.calibratedAt
-            val ok = repo.applyTxn(p, timestampMillis = date, applyToBalance = applyToBalance)
+        for (c in candidates) {
+            val applyToBalance = c.date >= c.accountCalibratedAt
+            val ok = repo.applyTxn(c.parsed, timestampMillis = c.date, applyToBalance = applyToBalance)
             if (ok) {
                 if (applyToBalance) appliedToBalance++ else historyOnly++
             }
@@ -92,7 +98,7 @@ class SmsInboxScanner @Inject constructor(
             totalScanned = totalScanned,
             bankMessages = bankMessages,
             parsedTxns = parsedTxns,
-            matchingTxns = matchingTxns,
+            matchingTxns = candidates.size,
             appliedToBalance = appliedToBalance,
             historyOnly = historyOnly,
             topSuffixes = topSuffixes
