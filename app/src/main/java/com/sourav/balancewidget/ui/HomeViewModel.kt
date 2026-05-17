@@ -85,8 +85,9 @@ class HomeViewModel @Inject constructor(
             _scanStatus.value = buildString {
                 append("Scanned ${r.totalScanned} SMS · ${r.bankMessages} bank · parsed ${r.parsedTxns}\n")
                 append("Top suffixes found: $topStr\n")
-                append("Matching *${cfg.accountSuffix}: ${r.matchingTxns} · applied ${r.applied}\n")
-                append("(Balance unchanged — past txns are history-only.)")
+                append("Matching *${cfg.accountSuffix}: ${r.matchingTxns}\n")
+                append("Applied to balance (since calibration): ${r.appliedToBalance}\n")
+                append("History-only (before calibration): ${r.historyOnly}")
             }
             BalanceWidget().updateAll(appContext)
         } catch (e: SecurityException) {

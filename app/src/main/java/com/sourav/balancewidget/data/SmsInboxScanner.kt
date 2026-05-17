@@ -23,13 +23,14 @@ class SmsInboxScanner @Inject constructor(
         val bankMessages: Int,
         val parsedTxns: Int,
         val matchingTxns: Int,
-        val applied: Int,
-        val topSuffixes: List<Pair<String, Int>> // for debugging
+        val appliedToBalance: Int, // post-calibration, changed balance
+        val historyOnly: Int,      // pre-calibration, info only
+        val topSuffixes: List<Pair<String, Int>>
     )
 
     suspend fun scanInbox(maxMessages: Int = 1000): ScanResult {
         val cfg = repo.configSnapshot()
-            ?: return ScanResult(0, 0, 0, 0, 0, emptyList())
+            ?: return ScanResult(0, 0, 0, 0, 0, 0, emptyList())
 
         val uri: Uri = Telephony.Sms.Inbox.CONTENT_URI
         val projection = arrayOf(
@@ -68,11 +69,18 @@ class SmsInboxScanner @Inject constructor(
         }
 
         // Apply oldest-first so history list stays chronological.
-        // applyToBalance=false: balance stays at calibrated value; entries are info-only.
+        // Post-calibration txns: deduct/credit from balance (the real monthly tracker).
+        // Pre-calibration txns: stored as history-only (no balance change) — already
+        // baked into the user-entered current balance.
         candidates.sortBy { it.first }
-        var applied = 0
+        var appliedToBalance = 0
+        var historyOnly = 0
         for ((date, _, p) in candidates) {
-            if (repo.applyTxn(p, timestampMillis = date, applyToBalance = false)) applied++
+            val applyToBalance = date >= cfg.calibratedAt
+            val ok = repo.applyTxn(p, timestampMillis = date, applyToBalance = applyToBalance)
+            if (ok) {
+                if (applyToBalance) appliedToBalance++ else historyOnly++
+            }
         }
 
         val topSuffixes = suffixCounts.entries
@@ -85,7 +93,8 @@ class SmsInboxScanner @Inject constructor(
             bankMessages = bankMessages,
             parsedTxns = parsedTxns,
             matchingTxns = matchingTxns,
-            applied = applied,
+            appliedToBalance = appliedToBalance,
+            historyOnly = historyOnly,
             topSuffixes = topSuffixes
         )
     }
