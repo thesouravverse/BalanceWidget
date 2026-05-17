@@ -12,7 +12,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -83,6 +85,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sourav.balancewidget.data.Account
 import com.sourav.balancewidget.data.BalanceEntry
+import com.sourav.balancewidget.ui.theme.CredPalette
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -211,14 +214,16 @@ fun HomeScreen(
 
         scanStatus?.let {
             Surface(
-                color = MaterialTheme.colorScheme.secondaryContainer,
+                color = CredPalette.SurfaceVariant,
                 shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, CredPalette.Border, RoundedCornerShape(12.dp))
             ) {
                 Text(
                     text = it,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    color = CredPalette.TextSecondary,
                     modifier = Modifier.padding(12.dp)
                 )
             }
@@ -303,30 +308,51 @@ private fun AccountChipsRow(
             FilterChip(
                 selected = acct.id == selectedId,
                 onClick = { onSelect(acct.id) },
-                label = { Text(acct.label) },
+                label = {
+                    Text(
+                        acct.label,
+                        fontWeight = FontWeight.Medium,
+                        letterSpacing = 0.2.sp
+                    )
+                },
                 leadingIcon = {
                     Icon(
                         Icons.Filled.AccountBalanceWallet,
                         contentDescription = null,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(14.dp)
                     )
                 },
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(50),
+                border = FilterChipDefaults.filterChipBorder(
+                    enabled = true,
+                    selected = acct.id == selectedId,
+                    borderColor = CredPalette.Border,
+                    selectedBorderColor = CredPalette.Gold,
+                    borderWidth = 1.dp,
+                    selectedBorderWidth = 1.dp
+                ),
                 colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    containerColor = CredPalette.Surface,
+                    labelColor = CredPalette.TextSecondary,
+                    iconColor = CredPalette.TextSecondary,
+                    selectedContainerColor = CredPalette.Gold.copy(alpha = 0.12f),
+                    selectedLabelColor = CredPalette.Gold,
+                    selectedLeadingIconColor = CredPalette.Gold
                 )
             )
         }
         AssistChip(
             onClick = onAdd,
-            label = { Text("Add") },
+            label = { Text("Add", fontWeight = FontWeight.Medium) },
             leadingIcon = {
-                Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(14.dp))
             },
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(50),
+            border = BorderStroke(1.dp, CredPalette.Border),
             colors = AssistChipDefaults.assistChipColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                containerColor = CredPalette.Surface,
+                labelColor = CredPalette.TextPrimary,
+                leadingIconContentColor = CredPalette.TextPrimary
             )
         )
     }
@@ -341,111 +367,114 @@ private fun HeroBalanceCard(
     onAddFirst: () -> Unit
 ) {
     val gradient = Brush.linearGradient(
-        colors = listOf(
-            MaterialTheme.colorScheme.primary,
-            MaterialTheme.colorScheme.primaryContainer
-        )
+        colors = listOf(CredPalette.HeroStart, CredPalette.HeroEnd)
     )
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(gradient, RoundedCornerShape(28.dp))
+            .border(1.dp, CredPalette.Border, RoundedCornerShape(28.dp))
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(gradient, RoundedCornerShape(24.dp))
-        ) {
-            if (account == null) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+        if (account == null) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(28.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Icon(
+                    Icons.Filled.AccountBalanceWallet,
+                    contentDescription = null,
+                    tint = Color.White
+                )
+                Text(
+                    "NO ACCOUNT YET",
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 1.5.sp
+                )
+                Text(
+                    "add your bank account to start tracking",
+                    color = Color.White.copy(alpha = 0.75f),
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Spacer(Modifier.height(4.dp))
+                Button(
+                    onClick = onAddFirst,
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = CredPalette.Gold,
+                        contentColor = Color.Black
+                    ),
+                    shape = RoundedCornerShape(50)
                 ) {
-                    Icon(
-                        Icons.Filled.AccountBalanceWallet,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimary
-                    )
-                    Text(
-                        "No account yet",
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        "Add your bank account to start tracking.",
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Button(onClick = onAddFirst) {
-                        Icon(Icons.Filled.Add, contentDescription = null)
-                        Spacer(Modifier.width(6.dp))
-                        Text("Add account")
-                    }
+                    Icon(Icons.Filled.Add, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("ADD ACCOUNT", fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                 }
-            } else {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(24.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                "Available balance",
-                                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f),
-                                style = MaterialTheme.typography.labelMedium
-                            )
-                            Text(
-                                account.label,
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Medium
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "AVAILABLE BALANCE",
+                            color = Color.White.copy(alpha = 0.7f),
+                            style = MaterialTheme.typography.labelSmall,
+                            letterSpacing = 1.5.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            account.label,
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    Row {
+                        IconButton(onClick = onEdit) {
+                            Icon(
+                                Icons.Filled.Edit,
+                                contentDescription = "Re-calibrate",
+                                tint = Color.White
                             )
                         }
-                        Row {
-                            IconButton(onClick = onEdit) {
-                                Icon(
-                                    Icons.Filled.Edit,
-                                    contentDescription = "Re-calibrate",
-                                    tint = MaterialTheme.colorScheme.onPrimary
-                                )
-                            }
-                            IconButton(onClick = onDelete) {
-                                Icon(
-                                    Icons.Filled.Delete,
-                                    contentDescription = "Delete",
-                                    tint = MaterialTheme.colorScheme.onPrimary
-                                )
-                            }
+                        IconButton(onClick = onDelete) {
+                            Icon(
+                                Icons.Filled.Delete,
+                                contentDescription = "Delete",
+                                tint = Color.White
+                            )
                         }
                     }
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        formatMoney(latest?.balance ?: account.startingBalance),
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        fontSize = 44.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.SansSerif
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        latest?.let {
-                            "Updated " + relativeTime(it.timestampMillis) + " • via " + it.source
-                        } ?: "Calibrated " + relativeTime(account.calibratedAt),
-                        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f),
-                        style = MaterialTheme.typography.bodySmall
-                    )
                 }
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    formatMoney(latest?.balance ?: account.startingBalance),
+                    color = Color.White,
+                    fontSize = 46.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.SansSerif,
+                    letterSpacing = (-1).sp
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    latest?.let {
+                        "updated " + relativeTime(it.timestampMillis).lowercase() + " · via " + it.source.lowercase()
+                    } ?: "calibrated " + relativeTime(account.calibratedAt).lowercase(),
+                    color = Color.White.copy(alpha = 0.7f),
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
         }
     }
@@ -464,9 +493,9 @@ private fun SectionHeader(
         Text(
             title.uppercase(),
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = CredPalette.TextMuted,
             fontWeight = FontWeight.SemiBold,
-            letterSpacing = 1.sp
+            letterSpacing = 1.5.sp
         )
         trailing?.invoke()
     }
@@ -475,9 +504,11 @@ private fun SectionHeader(
 @Composable
 private fun TransactionsCard(history: List<BalanceEntry>) {
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, CredPalette.Border, RoundedCornerShape(20.dp)),
         shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+        color = CredPalette.Surface
     ) {
         Column {
             if (history.isEmpty()) {
@@ -513,43 +544,55 @@ private fun WidgetLookCard(
     opacity: Float,
     onOpacityChange: (Float) -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, CredPalette.Border, RoundedCornerShape(20.dp)),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        color = CredPalette.Surface
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     Icons.Filled.Tune,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = CredPalette.Gold,
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(Modifier.width(8.dp))
-                Text("Widget look", fontWeight = FontWeight.SemiBold)
+                Text(
+                    "WIDGET LOOK",
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 1.5.sp,
+                    style = MaterialTheme.typography.labelMedium
+                )
                 Spacer(Modifier.weight(1f))
                 Text(
                     "${(opacity * 100).toInt()}%",
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.primary
+                    fontWeight = FontWeight.Bold,
+                    color = CredPalette.Gold,
+                    style = MaterialTheme.typography.titleMedium
                 )
             }
             Text(
-                "Background opacity — drag left to see more wallpaper through the widget.",
+                "background opacity — drag left to see wallpaper through the widget",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = CredPalette.TextSecondary
             )
             Slider(
                 value = opacity,
                 onValueChange = onOpacityChange,
-                valueRange = 0.1f..1.0f
+                valueRange = 0.1f..1.0f,
+                colors = androidx.compose.material3.SliderDefaults.colors(
+                    thumbColor = CredPalette.Gold,
+                    activeTrackColor = CredPalette.Gold,
+                    inactiveTrackColor = CredPalette.Border
+                )
             )
         }
     }
@@ -566,9 +609,11 @@ private fun ExpandableSection(
     val rotation by animateFloatAsState(if (expanded) 180f else 0f, label = "expand")
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Surface(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, CredPalette.Border, RoundedCornerShape(16.dp)),
             shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+            color = CredPalette.Surface,
             onClick = onToggle
         ) {
             Row(
@@ -580,20 +625,22 @@ private fun ExpandableSection(
                 Icon(
                     icon,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = CredPalette.Gold,
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(Modifier.width(12.dp))
                 Text(
-                    title,
+                    title.uppercase(),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 1.5.sp,
                     modifier = Modifier.weight(1f)
                 )
                 Icon(
                     Icons.Filled.ExpandMore,
                     contentDescription = if (expanded) "Collapse" else "Expand",
-                    modifier = Modifier.rotate(rotation)
+                    modifier = Modifier.rotate(rotation),
+                    tint = CredPalette.TextSecondary
                 )
             }
         }
@@ -609,39 +656,66 @@ private fun SetupCard(
     onOpenNotifSettings: () -> Unit,
     onGrantSms: () -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, CredPalette.Border, RoundedCornerShape(16.dp)),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        color = CredPalette.Surface
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     Icons.Filled.Notifications,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = CredPalette.Gold,
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(Modifier.width(8.dp))
-                Text("Permissions", fontWeight = FontWeight.SemiBold)
+                Text(
+                    "PERMISSIONS",
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 1.5.sp,
+                    style = MaterialTheme.typography.labelMedium
+                )
             }
-            Button(onClick = onOpenNotifSettings, modifier = Modifier.fillMaxWidth()) {
-                Text(if (notifEnabled) "Notification access ✓" else "Open Notification Access")
+            Button(
+                onClick = onOpenNotifSettings,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(50),
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                    containerColor = CredPalette.Gold,
+                    contentColor = Color.Black
+                )
+            ) {
+                Text(
+                    if (notifEnabled) "NOTIFICATION ACCESS ✓" else "OPEN NOTIFICATION ACCESS",
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
             }
-            OutlinedButton(onClick = onGrantSms, modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(
+                onClick = onGrantSms,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(50),
+                border = BorderStroke(1.dp, CredPalette.Border),
+                colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                    contentColor = CredPalette.TextPrimary
+                )
+            ) {
                 Icon(Icons.Filled.Sms, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Grant SMS access")
+                Text("GRANT SMS ACCESS", fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
             }
             Text(
-                "Then long-press home → Widgets → drag 'Balance Widget'.",
+                "then long-press home → widgets → drag 'balance widget'",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = CredPalette.TextMuted
             )
         }
     }
@@ -654,44 +728,60 @@ private fun TestsCard(
     onInjectCredit: () -> Unit,
     onResetAll: () -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, CredPalette.Border, RoundedCornerShape(16.dp)),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        color = CredPalette.Surface
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     Icons.Filled.Science,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = CredPalette.Gold,
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(Modifier.width(8.dp))
-                Text("Test the parser", fontWeight = FontWeight.SemiBold)
+                Text(
+                    "TEST PARSER",
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 1.5.sp,
+                    style = MaterialTheme.typography.labelMedium
+                )
             }
             Text(
-                "Injects sample HDFC SMS for *$activeSuffix.",
+                "injects sample HDFC SMS for *$activeSuffix",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = CredPalette.TextSecondary
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onInjectDebit, modifier = Modifier.weight(1f)) {
-                    Text("Debit ₹500")
-                }
-                OutlinedButton(onClick = onInjectCredit, modifier = Modifier.weight(1f)) {
-                    Text("Credit ₹1200")
-                }
+                OutlinedButton(
+                    onClick = onInjectDebit,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(50),
+                    border = BorderStroke(1.dp, CredPalette.Border)
+                ) { Text("− ₹500") }
+                OutlinedButton(
+                    onClick = onInjectCredit,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(50),
+                    border = BorderStroke(1.dp, CredPalette.Border)
+                ) { Text("+ ₹1200") }
             }
             TextButton(
                 onClick = onResetAll,
-                modifier = Modifier.fillMaxWidth()
-            ) { Text("Reset everything") }
+                modifier = Modifier.fillMaxWidth(),
+                colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                    contentColor = CredPalette.Danger
+                )
+            ) { Text("RESET EVERYTHING", fontWeight = FontWeight.Bold, letterSpacing = 1.sp) }
         }
     }
 }
@@ -710,14 +800,33 @@ private fun AccountEditorDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (existing == null) "Add account" else "Re-calibrate") },
+        containerColor = CredPalette.Surface,
+        titleContentColor = CredPalette.TextPrimary,
+        textContentColor = CredPalette.TextSecondary,
+        title = {
+            Text(
+                if (existing == null) "ADD ACCOUNT" else "RE-CALIBRATE",
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.5.sp
+            )
+        },
         text = {
+            val fieldColors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = CredPalette.Gold,
+                unfocusedBorderColor = CredPalette.Border,
+                focusedLabelColor = CredPalette.Gold,
+                unfocusedLabelColor = CredPalette.TextMuted,
+                cursorColor = CredPalette.Gold,
+                focusedTextColor = CredPalette.TextPrimary,
+                unfocusedTextColor = CredPalette.TextPrimary
+            )
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
                     value = label,
                     onValueChange = { label = it.take(40) },
                     label = { Text("Label (e.g. HDFC Savings)") },
                     singleLine = true,
+                    colors = fieldColors,
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
@@ -726,6 +835,7 @@ private fun AccountEditorDialog(
                     label = { Text("Account last 4 digits") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
+                    colors = fieldColors,
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
@@ -736,26 +846,39 @@ private fun AccountEditorDialog(
                     label = { Text("Current balance (₹)") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
+                    colors = fieldColors,
                     modifier = Modifier.fillMaxWidth()
                 )
                 if (existing != null) {
                     Text(
-                        "Re-calibrating wipes this account's history and stamps a fresh start.",
+                        "re-calibrating wipes this account's history and stamps a fresh start.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = CredPalette.TextMuted
                     )
                 }
             }
         },
         confirmButton = {
             val balanceVal = balanceText.toDoubleOrNull()
-            TextButton(
+            Button(
                 enabled = balanceVal != null && suffix.length >= 4,
-                onClick = { onSave(label.trim(), suffix, balanceVal!!) }
-            ) { Text("Save") }
+                onClick = { onSave(label.trim(), suffix, balanceVal!!) },
+                shape = RoundedCornerShape(50),
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                    containerColor = CredPalette.Gold,
+                    contentColor = Color.Black,
+                    disabledContainerColor = CredPalette.Border,
+                    disabledContentColor = CredPalette.TextMuted
+                )
+            ) { Text("SAVE", fontWeight = FontWeight.Bold, letterSpacing = 1.sp) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(
+                onClick = onDismiss,
+                colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                    contentColor = CredPalette.TextSecondary
+                )
+            ) { Text("CANCEL", letterSpacing = 1.sp) }
         }
     )
 }
@@ -765,22 +888,22 @@ private fun TxnRow(e: BalanceEntry) {
     val isDebit = e.direction == "DEBIT"
     val isCredit = e.direction == "CREDIT"
     val color = when {
-        isDebit -> Color(0xFFD32F2F)
-        isCredit -> Color(0xFF2E7D32)
-        else -> MaterialTheme.colorScheme.onSurface
+        isDebit -> CredPalette.Danger
+        isCredit -> CredPalette.Success
+        else -> CredPalette.TextSecondary
     }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Icon circle
         Box(
             modifier = Modifier
-                .size(36.dp)
-                .background(color.copy(alpha = 0.12f), RoundedCornerShape(50)),
+                .size(38.dp)
+                .background(color.copy(alpha = 0.12f), RoundedCornerShape(50))
+                .border(1.dp, color.copy(alpha = 0.3f), RoundedCornerShape(50)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -796,19 +919,20 @@ private fun TxnRow(e: BalanceEntry) {
                     (if (isDebit) "−₹" else if (isCredit) "+₹" else "₹") + formatNumber(it)
                 } ?: e.direction,
                 color = color,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = FontWeight.Bold,
                 style = MaterialTheme.typography.titleSmall
             )
             Text(
-                relativeTime(e.timestampMillis) + " · " + e.source +
+                relativeTime(e.timestampMillis).lowercase() + " · " + e.source.lowercase() +
                     (e.accountSuffix?.let { " · *$it" } ?: ""),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = CredPalette.TextMuted
             )
         }
         Text(
             formatMoney(e.balance),
             fontWeight = FontWeight.Bold,
+            color = CredPalette.TextPrimary,
             style = MaterialTheme.typography.titleSmall
         )
     }

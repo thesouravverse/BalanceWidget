@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import com.sourav.balancewidget.ui.HomeScreen
 import com.sourav.balancewidget.ui.theme.BalanceWidgetTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -40,10 +41,16 @@ class MainActivity : ComponentActivity() {
                             CenterAlignedTopAppBar(
                                 title = {
                                     Text(
-                                        "Balance Widget",
-                                        fontWeight = FontWeight.SemiBold
+                                        "balance widget".uppercase(),
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 2.sp
                                     )
                                 },
+                                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                                    containerColor = MaterialTheme.colorScheme.background,
+                                    scrolledContainerColor = MaterialTheme.colorScheme.background,
+                                    titleContentColor = MaterialTheme.colorScheme.onBackground
+                                ),
                                 scrollBehavior = scrollBehavior
                             )
                         }

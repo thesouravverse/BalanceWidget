@@ -70,7 +70,7 @@ class BalanceWidget : GlanceAppWidget() {
         opacity: Float
     ) {
         val openApp = actionStartActivity<MainActivity>()
-        val bg = Color(0xFF1E2228).copy(alpha = opacity.coerceIn(0.1f, 1.0f))
+        val bg = Color(0xFF0A0A0A).copy(alpha = opacity.coerceIn(0.1f, 1.0f))
 
         Box(
             modifier = GlanceModifier
