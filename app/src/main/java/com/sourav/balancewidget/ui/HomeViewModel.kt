@@ -8,6 +8,7 @@ import com.sourav.balancewidget.data.BalanceRepository
 import com.sourav.balancewidget.data.SmsInboxScanner
 import com.sourav.balancewidget.parser.BalanceParser
 import com.sourav.balancewidget.widget.BalanceWidget
+import androidx.glance.appwidget.updateAll
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
