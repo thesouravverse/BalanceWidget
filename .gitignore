@@ -1,0 +1,23 @@
+# Gradle
+.gradle/
+build/
+local.properties
+.kotlin/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Keys & secrets
+*.jks
+*.keystore
+keystore.properties
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Misc
+captures/
+gradle-app.setting

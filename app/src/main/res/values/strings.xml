@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Balance Widget</string>
+    <string name="widget_label">Bank Balance</string>
+    <string name="widget_description">Shows your latest bank balance from SMS/notifications</string>
+</resources>
