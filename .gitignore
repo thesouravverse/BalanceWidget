@@ -26,3 +26,6 @@ captures/
 gradle-app.setting
 
 artifact/
+ABB/
+*.aab
+*.apk
