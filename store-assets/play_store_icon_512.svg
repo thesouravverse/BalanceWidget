@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!--
+    Play Store icon source — 512×512.
+    Convert this SVG to PNG when ready (no transparency, no rounded corners
+    — Play crops automatically). Use https://svgtopng.com or
+    Inkscape: File > Export > PNG, 512x512, opaque background.
+  -->
+  <defs>
+    <radialGradient id="bgGlow" cx="0.3" cy="0.3" r="0.7">
+      <stop offset="0%"  stop-color="#2D1B69" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#0A0A0A" stop-opacity="1"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F7D26E"/>
+      <stop offset="60%" stop-color="#E9B949"/>
+      <stop offset="100%" stop-color="#B8862E"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Pitch-black canvas with subtle purple highlight -->
+  <rect width="512" height="512" fill="#0A0A0A"/>
+  <rect width="512" height="512" fill="url(#bgGlow)"/>
+
+  <!-- Bold CRED-gold rupee glyph, centered, scaled to 512px viewport -->
+  <g stroke="url(#gold)" stroke-width="34" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <!-- top bar -->
+    <line x1="170" y1="170" x2="350" y2="170"/>
+    <!-- second bar -->
+    <line x1="170" y1="227" x2="350" y2="227"/>
+    <!-- loop -->
+    <path d="M275,170 C341,170 341,294 275,294 L170,294"/>
+    <!-- diagonal descender -->
+    <line x1="208" y1="294" x2="350" y2="388"/>
+  </g>
+</svg>

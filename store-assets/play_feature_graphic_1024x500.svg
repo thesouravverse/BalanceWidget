@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="500" viewBox="0 0 1024 500">
+  <!--
+    Play Store feature graphic — 1024×500.
+    No critical text near edges (Play crops on some surfaces).
+    Convert to PNG (opaque) before uploading.
+  -->
+  <defs>
+    <linearGradient id="hero" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4C1D95"/>
+      <stop offset="100%" stop-color="#C026D3"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F7D26E"/>
+      <stop offset="100%" stop-color="#B8862E"/>
+    </linearGradient>
+    <linearGradient id="cardFade" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1C1C1F" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#0A0A0A" stop-opacity="1"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Pitch-black canvas -->
+  <rect width="1024" height="500" fill="#0A0A0A"/>
+
+  <!-- Left side: brand mark + tagline -->
+  <g transform="translate(70,140)">
+    <!-- Rupee glyph in gold -->
+    <g stroke="url(#gold)" stroke-width="11" stroke-linecap="round" stroke-linejoin="round" fill="none">
+      <line x1="0" y1="0" x2="80" y2="0"/>
+      <line x1="0" y1="22" x2="80" y2="22"/>
+      <path d="M48,0 C76,0 76,55 48,55 L0,55"/>
+      <line x1="18" y1="55" x2="80" y2="100"/>
+    </g>
+
+    <text x="120" y="35"
+          font-family="Inter, Helvetica, Arial, sans-serif"
+          font-size="44" font-weight="800"
+          fill="#F5F5F7"
+          letter-spacing="-1">BALANCE</text>
+    <text x="120" y="78"
+          font-family="Inter, Helvetica, Arial, sans-serif"
+          font-size="44" font-weight="800"
+          fill="#F5F5F7"
+          letter-spacing="-1">WIDGET</text>
+
+    <text x="0" y="155"
+          font-family="Inter, Helvetica, Arial, sans-serif"
+          font-size="20" font-weight="500"
+          fill="#99FFFFFF"
+          letter-spacing="3">YOUR BANK BALANCE.</text>
+    <text x="0" y="183"
+          font-family="Inter, Helvetica, Arial, sans-serif"
+          font-size="20" font-weight="500"
+          fill="#E9B949"
+          letter-spacing="3">ON YOUR HOME SCREEN.</text>
+  </g>
+
+  <!-- Right side: stylized phone widget mock -->
+  <g transform="translate(670,90)">
+    <!-- phone outline -->
+    <rect x="0" y="0" width="270" height="320" rx="36" ry="36"
+          fill="#141416" stroke="#FFFFFF" stroke-opacity="0.08" stroke-width="2"/>
+
+    <!-- hero balance card (magenta gradient) -->
+    <rect x="20" y="40" width="230" height="125" rx="22" ry="22"
+          fill="url(#hero)" stroke="#FFFFFF" stroke-opacity="0.15" stroke-width="1"/>
+    <text x="36" y="68"
+          font-family="Inter, Helvetica, Arial, sans-serif"
+          font-size="10" font-weight="700"
+          fill="#FFFFFF" fill-opacity="0.75"
+          letter-spacing="1.5">AVAILABLE BALANCE</text>
+    <text x="36" y="118"
+          font-family="Inter, Helvetica, Arial, sans-serif"
+          font-size="34" font-weight="800"
+          fill="#FFFFFF"
+          letter-spacing="-1">₹84,210</text>
+    <text x="36" y="145"
+          font-family="Inter, Helvetica, Arial, sans-serif"
+          font-size="10" font-weight="500"
+          fill="#FFFFFF" fill-opacity="0.6">updated 2 min ago · via sms</text>
+
+    <!-- transaction row 1 (credit) -->
+    <rect x="20" y="185" width="230" height="55" rx="14" ry="14"
+          fill="#141416" stroke="#FFFFFF" stroke-opacity="0.08" stroke-width="1"/>
+    <circle cx="44" cy="212" r="13" fill="#10B981" fill-opacity="0.18" stroke="#10B981" stroke-opacity="0.4" stroke-width="1"/>
+    <text x="44" y="217" font-family="Inter" font-size="14" font-weight="800" fill="#10B981" text-anchor="middle">↓</text>
+    <text x="66" y="208" font-family="Inter" font-size="13" font-weight="700" fill="#10B981">+₹1,200</text>
+    <text x="66" y="226" font-family="Inter" font-size="9" fill="#FFFFFF" fill-opacity="0.4">2h ago · sms</text>
+    <text x="240" y="217" font-family="Inter" font-size="11" font-weight="700" fill="#F5F5F7" text-anchor="end">₹84,210</text>
+
+    <!-- transaction row 2 (debit) -->
+    <rect x="20" y="252" width="230" height="55" rx="14" ry="14"
+          fill="#141416" stroke="#FFFFFF" stroke-opacity="0.08" stroke-width="1"/>
+    <circle cx="44" cy="279" r="13" fill="#EF4444" fill-opacity="0.18" stroke="#EF4444" stroke-opacity="0.4" stroke-width="1"/>
+    <text x="44" y="284" font-family="Inter" font-size="14" font-weight="800" fill="#EF4444" text-anchor="middle">↑</text>
+    <text x="66" y="275" font-family="Inter" font-size="13" font-weight="700" fill="#EF4444">−₹500</text>
+    <text x="66" y="293" font-family="Inter" font-size="9" fill="#FFFFFF" fill-opacity="0.4">5h ago · sms</text>
+    <text x="240" y="284" font-family="Inter" font-size="11" font-weight="700" fill="#F5F5F7" text-anchor="end">₹83,010</text>
+  </g>
+</svg>
