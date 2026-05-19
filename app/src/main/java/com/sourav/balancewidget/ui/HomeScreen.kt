@@ -41,8 +41,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
@@ -98,7 +96,6 @@ fun HomeScreen(
     vm: HomeViewModel = hiltViewModel()
 ) {
     val state by vm.uiState.collectAsStateWithLifecycle()
-    val scanStatus by vm.scanStatus.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     val smsPermLauncher = rememberLauncherForActivityResult(
@@ -194,40 +191,10 @@ fun HomeScreen(
 
         // ---- Transactions ----
         SectionHeader(
-            title = if (selectedAccount != null) "Recent activity" else "No account",
-            trailing = {
-                if (selectedAccount != null) {
-                    TextButton(onClick = { vm.syncPastSms() }) {
-                        Icon(
-                            Icons.Filled.Refresh,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text("Sync SMS", fontSize = 13.sp)
-                    }
-                }
-            }
+            title = if (selectedAccount != null) "Recent activity" else "No account"
         )
 
         TransactionsCard(history = selectedHistory)
-
-        scanStatus?.let {
-            Surface(
-                color = CredPalette.SurfaceVariant,
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, CredPalette.Border, RoundedCornerShape(12.dp))
-            ) {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = CredPalette.TextSecondary,
-                    modifier = Modifier.padding(12.dp)
-                )
-            }
-        }
 
         // ---- Widget look (always visible — primary new feature) ----
         WidgetLookCard(
@@ -262,24 +229,17 @@ fun HomeScreen(
                         smsPermLauncher.launch(perms.toTypedArray())
                     }
                 )
-                TestsCard(
-                    activeSuffix = selectedAccount?.suffix ?: "9504",
-                    onInjectDebit = {
-                        val s = selectedAccount?.suffix ?: "9504"
-                        vm.addTestMessage(
-                            "Sent Rs.500.00 From HDFC Bank A/C *$s To Test On ${
-                                SimpleDateFormat("dd/MM/yy", Locale.getDefault()).format(Date())
-                            }"
-                        )
-                    },
-                    onInjectCredit = {
-                        val s = selectedAccount?.suffix ?: "9504"
-                        vm.addTestMessage(
-                            "Update! INR 1,200.00 deposited in HDFC Bank A/c XX$s on today."
-                        )
-                    },
-                    onResetAll = { vm.resetAll() }
-                )
+                OutlinedButton(
+                    onClick = { vm.resetAll() },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(50),
+                    border = BorderStroke(1.dp, CredPalette.Border),
+                    colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                        contentColor = CredPalette.Danger
+                    )
+                ) {
+                    Text("RESET EVERYTHING", fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                }
             }
         }
 
@@ -717,71 +677,6 @@ private fun SetupCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = CredPalette.TextMuted
             )
-        }
-    }
-}
-
-@Composable
-private fun TestsCard(
-    activeSuffix: String,
-    onInjectDebit: () -> Unit,
-    onInjectCredit: () -> Unit,
-    onResetAll: () -> Unit
-) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, CredPalette.Border, RoundedCornerShape(16.dp)),
-        shape = RoundedCornerShape(16.dp),
-        color = CredPalette.Surface
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Filled.Science,
-                    contentDescription = null,
-                    tint = CredPalette.Gold,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    "TEST PARSER",
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 1.5.sp,
-                    style = MaterialTheme.typography.labelMedium
-                )
-            }
-            Text(
-                "injects sample HDFC SMS for *$activeSuffix",
-                style = MaterialTheme.typography.bodySmall,
-                color = CredPalette.TextSecondary
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                    onClick = onInjectDebit,
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(50),
-                    border = BorderStroke(1.dp, CredPalette.Border)
-                ) { Text("− ₹500") }
-                OutlinedButton(
-                    onClick = onInjectCredit,
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(50),
-                    border = BorderStroke(1.dp, CredPalette.Border)
-                ) { Text("+ ₹1200") }
-            }
-            TextButton(
-                onClick = onResetAll,
-                modifier = Modifier.fillMaxWidth(),
-                colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
-                    contentColor = CredPalette.Danger
-                )
-            ) { Text("RESET EVERYTHING", fontWeight = FontWeight.Bold, letterSpacing = 1.sp) }
         }
     }
 }
