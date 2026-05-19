@@ -5,9 +5,11 @@ package com.sourav.balancewidget.ui
 import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
 import android.text.TextUtils
+import androidx.core.content.ContextCompat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -101,6 +103,29 @@ fun HomeScreen(
     val smsPermLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { /* ignored */ }
+
+    // Auto-prompt SMS + notification permissions on first launch so users
+    // don't have to dig into Advanced. Fires once per app process when any
+    // required permission is still missing.
+    var permPrompted by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (permPrompted) return@LaunchedEffect
+        val needed = mutableListOf<String>()
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECEIVE_SMS)
+            != PackageManager.PERMISSION_GRANTED
+        ) needed += Manifest.permission.RECEIVE_SMS
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS)
+            != PackageManager.PERMISSION_GRANTED
+        ) needed += Manifest.permission.READ_SMS
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
+            != PackageManager.PERMISSION_GRANTED
+        ) needed += Manifest.permission.POST_NOTIFICATIONS
+        if (needed.isNotEmpty()) {
+            smsPermLauncher.launch(needed.toTypedArray())
+        }
+        permPrompted = true
+    }
 
     var selectedAccountId by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(state.accounts) {
