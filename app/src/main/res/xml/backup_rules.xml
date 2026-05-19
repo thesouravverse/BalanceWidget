@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android Auto Backup rules.
+  Backs up the user's accounts + history + widget opacity from DataStore
+  so a phone reinstall / new device restores the app state.
+-->
+<full-backup-content>
+    <include domain="file" path="datastore/" />
+    <include domain="sharedpref" path="." />
+</full-backup-content>
