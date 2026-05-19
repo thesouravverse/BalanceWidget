@@ -13,6 +13,9 @@ local.properties
 *.jks
 *.keystore
 keystore.properties
+keystore_bundle/
+**/SECRETS.txt
+**/keystore_b64.txt
 
 # OS
 .DS_Store
