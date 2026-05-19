@@ -24,21 +24,26 @@ object BalanceParser {
         RegexOption.IGNORE_CASE
     )
 
+    // Amount group: one or more digits, optional Indian-style commas anywhere inside,
+    // optional .xx decimal. Commas are stripped in code before parsing.
+    // Examples this must match: 4500, 4,500, 45000, 45,000, 4,50,000, 1234.56
+    private const val AMOUNT_GROUP = """(\d[\d,]*(?:\.\d{1,2})?)"""
+
     private val debitAmountRegex = Regex(
-        """(?:sent|debited|spent|withdrawn|paid|purchase\s+of|txn\s+of|payment\s+of)\s+(?:rs\.?|inr|₹)?\s*([0-9]{1,3}(?:,?[0-9]{2,3})*(?:\.[0-9]{1,2})?)""",
+        """(?:sent|debited|spent|withdrawn|paid|purchase\s+of|txn\s+of|payment\s+of)\s+(?:rs\.?|inr|₹)?\s*""" + AMOUNT_GROUP,
         RegexOption.IGNORE_CASE
     )
     private val creditAmountRegex = Regex(
-        """(?:received|credited|deposited|refund(?:ed)?|added)\s+(?:rs\.?|inr|₹)?\s*([0-9]{1,3}(?:,?[0-9]{2,3})*(?:\.[0-9]{1,2})?)""",
+        """(?:received|credited|deposited|refund(?:ed)?|added)\s+(?:rs\.?|inr|₹)?\s*""" + AMOUNT_GROUP,
         RegexOption.IGNORE_CASE
     )
     private val amountThenDirectionRegex = Regex(
-        """(?:rs\.?|inr|₹)\s*([0-9]{1,3}(?:,?[0-9]{2,3})*(?:\.[0-9]{1,2})?)\s*(debited|credited|spent|sent|received|withdrawn|deposited)""",
+        """(?:rs\.?|inr|₹)\s*""" + AMOUNT_GROUP + """\s*(debited|credited|spent|sent|received|withdrawn|deposited)""",
         RegexOption.IGNORE_CASE
     )
 
     private val balanceRegex = Regex(
-        """(?:avl[\s.]*bal(?:ance)?|available[\s.]*bal(?:ance)?)\s*[:\-]?\s*(?:rs\.?|inr|₹)?\s*([0-9]{1,3}(?:,?[0-9]{2,3})*(?:\.[0-9]{1,2})?)""",
+        """(?:avl[\s.]*bal(?:ance)?|available[\s.]*bal(?:ance)?)\s*[:\-]?\s*(?:rs\.?|inr|₹)?\s*""" + AMOUNT_GROUP,
         RegexOption.IGNORE_CASE
     )
 
