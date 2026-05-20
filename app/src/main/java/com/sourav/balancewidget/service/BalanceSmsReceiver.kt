@@ -25,14 +25,23 @@ class BalanceSmsReceiver : BroadcastReceiver() {
         if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
         val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent) ?: return
 
-        val bySender = messages.groupBy { it.originatingAddress.orEmpty() }
-        for ((sender, parts) in bySender) {
-            val body = parts.joinToString("") { it.messageBody.orEmpty() }
-            val parsed = BalanceParser.parseTxn(body, source = "SMS", sender = sender) ?: continue
-            scope.launch {
-                if (repo.applyTxn(parsed)) {
-                    runCatching { BalanceWidget().updateAll(context) }
+        // goAsync() keeps the BroadcastReceiver alive (~10s budget) so our DataStore
+        // write + Glance updateAll actually complete before the process is reaped.
+        val pending = goAsync()
+        scope.launch {
+            try {
+                val bySender = messages.groupBy { it.originatingAddress.orEmpty() }
+                var anyApplied = false
+                for ((sender, parts) in bySender) {
+                    val body = parts.joinToString("") { it.messageBody.orEmpty() }
+                    val parsed = BalanceParser.parseTxn(body, source = "SMS", sender = sender) ?: continue
+                    if (repo.applyTxn(parsed)) anyApplied = true
                 }
+                if (anyApplied) {
+                    runCatching { BalanceWidget().updateAll(context.applicationContext) }
+                }
+            } finally {
+                pending.finish()
             }
         }
     }

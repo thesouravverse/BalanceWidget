@@ -20,7 +20,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.sourav.balancewidget.ui.HomeScreen
 import com.sourav.balancewidget.ui.theme.BalanceWidgetTheme
+import com.sourav.balancewidget.widget.BalanceWidget
+import androidx.glance.appwidget.updateAll
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -59,6 +64,16 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Safety net: any time the user opens or returns to the app, push the latest
+        // balance to the widget. Covers cases where the SMS receiver was killed before
+        // it could call updateAll (e.g. doze, battery optimizer, app force-stopped).
+        CoroutineScope(Dispatchers.IO).launch {
+            runCatching { BalanceWidget().updateAll(applicationContext) }
         }
     }
 }
